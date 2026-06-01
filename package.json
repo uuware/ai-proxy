@@ -1,0 +1,137 @@
+{
+  "name": "ai-proxy-vscode",
+  "displayName": "AI Proxy",
+  "description": "VS Code UI for running a local OpenAI-compatible AI proxy with per-workspace request logs.",
+  "version": "0.0.1",
+  "publisher": "local-ai-proxy",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:aiProxy.controlView",
+    "onView:aiProxy.panelView",
+    "onCommand:aiProxy.openControl",
+    "onCommand:aiProxy.start",
+    "onCommand:aiProxy.stop",
+    "onCommand:aiProxy.restart"
+  ],
+  "main": "./src/extension.js",
+  "scripts": {
+    "check": "node --check ./src/extension.js && node --check ./server/ai-proxy.js",
+    "package:vsix": "node ./dev/package-extension.js --target marketplace",
+    "package:vsx": "node ./dev/package-extension.js --target open-vsx",
+    "package:all": "node ./dev/package-extension.js --target all --clean",
+    "publish:open-vsx": "ovsx publish"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiProxy.openControl",
+        "title": "Open Control View",
+        "category": "AI Proxy",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "aiProxy.start",
+        "title": "Start Server",
+        "category": "AI Proxy",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "aiProxy.stop",
+        "title": "Stop Server",
+        "category": "AI Proxy",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "aiProxy.restart",
+        "title": "Restart Server",
+        "category": "AI Proxy",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "aiProxy.openLogs",
+        "title": "Open Log Directory",
+        "category": "AI Proxy",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "aiProxy.openLatestLog",
+        "title": "Open Latest Log",
+        "category": "AI Proxy",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "aiProxy.copyLocalUrl",
+        "title": "Copy Local Base URL",
+        "category": "AI Proxy",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "aiProxy.showOutput",
+        "title": "Show Output",
+        "category": "AI Proxy",
+        "icon": "$(output)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiProxy",
+          "title": "AI Proxy",
+          "icon": "resources/icon.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "aiProxyPanel",
+          "title": "AI Proxy",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "aiProxy": [
+        {
+          "id": "aiProxy.controlView",
+          "name": "Control",
+          "type": "webview"
+        }
+      ],
+      "aiProxyPanel": [
+        {
+          "id": "aiProxy.panelView",
+          "name": "Control",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiProxy.start",
+          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aiProxy.stop",
+          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aiProxy.openLogs",
+          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "group": "navigation@3"
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.2",
+    "ovsx": "^0.10.4"
+  }
+}

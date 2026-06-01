@@ -1,0 +1,7 @@
+.vscode/**
+.vscode-test/**
+node_modules/**
+*.vsix
+dist/**
+dev/**
+.ai-proxy-logs/**

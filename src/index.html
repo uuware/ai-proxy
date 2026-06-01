@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <title>AI Proxy</title>
+  <style nonce="${nonce}">
+    :root {
+      color-scheme: light dark;
+      --gap: 10px;
+      --radius: 8px;
+      --border: var(--vscode-panel-border, var(--vscode-widget-border));
+      --muted: var(--vscode-descriptionForeground);
+      --ok: #2ea043;
+      --warn: #d29922;
+      --bad: #f85149;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 12px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+      font: var(--vscode-font-size) var(--vscode-font-family);
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .sticky-title {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin: -12px 0 12px;
+      padding: 12px 0;
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+      border-bottom: 1px solid var(--border);
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+
+    .container {
+      display: grid;
+      gap: var(--gap);
+      max-width: 920px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--vscode-editor-background);
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }
+
+    .status-item {
+      min-width: 0;
+      padding: 8px;
+      border-radius: 6px;
+      background: var(--vscode-input-background);
+      border: 1px solid var(--border);
+    }
+
+    .status-label {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .status-value {
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+    }
+
+    .badge::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--muted);
+    }
+
+    .badge.running::before { background: var(--ok); }
+    .badge.starting::before, .badge.stopping::before { background: var(--warn); }
+    .badge.stopped::before { background: var(--bad); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      user-select: none;
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 30px;
+      padding: 5px 7px;
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 4px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+
+    textarea {
+      min-height: 58px;
+      resize: vertical;
+    }
+
+    .checkbox-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      color: var(--vscode-foreground);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: auto;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .input-with-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .project-root-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .project-root-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .server-url-card,
+    .active-profile-row,
+    .profile-list-field {
+      margin-top: 10px;
+    }
+
+    .server-url-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .profile-list-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .server-url-value,
+    .active-profile-value {
+      margin-top: 6px;
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--vscode-input-background);
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+
+    button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 4px;
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-background);
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--vscode-button-hoverBackground);
+    }
+
+    button.secondary {
+      color: var(--vscode-button-secondaryForeground);
+      background: var(--vscode-button-secondaryBackground);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    button.danger {
+      color: #fff;
+      background: #b42318;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .hint, .message {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .message {
+      padding: 8px;
+      border-left: 3px solid var(--vscode-focusBorder);
+      background: var(--vscode-input-background);
+      overflow-wrap: anywhere;
+    }
+
+    .logs {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .log-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--vscode-input-background);
+    }
+
+    .log-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .log-meta {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .mini {
+      min-height: 26px;
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="sticky-title"><span>AI Proxy</span> <span id="statusBadge" class="badge stopped">Stopped</span></h1>
+
+    <section class="card">
+      <h2>Server Settings</h2>
+      <div class="grid">
+        <div class="field">
+          <label for="bindHost">Bind Host</label>
+          <select id="bindHost">
+            <option value="127.0.0.1">Local machine only</option>
+            <option value="0.0.0.0">All network interfaces</option>
+          </select>
+          <div class="hint">For other machines, bind to all network interfaces, then connect with this computer's LAN IP and the same port.</div>
+        </div>
+        <div class="field">
+          <label for="port">Local server port</label>
+          <input id="port" type="number" min="1" max="65535" step="1">
+        </div>
+        <div class="field">
+          <label for="logMaxCount">Max log files</label>
+          <input id="logMaxCount" type="number" min="0" step="1">
+        </div>
+      </div>
+      <div class="actions">
+        <button id="startServer" type="button">Start</button>
+        <button id="stopServer" class="secondary" type="button">Stop</button>
+      </div>
+      <div class="server-url-card">
+        <div class="server-url-row">
+          <label for="localUrl">Server URL</label>
+          <button id="copyLocalUrl" class="secondary mini" type="button">Copy URL</button>
+        </div>
+        <div id="localUrl" class="server-url-value">-</div>
+      </div>
+      <div id="message" class="message" style="margin-top: 10px;"></div>
+    </section>
+
+    <section class="card">
+      <h2>Profile</h2>
+      <div class="active-profile-row">
+        <label>Active profile:</label>
+        <div id="activeProfileName" class="active-profile-value">-</div>
+      </div>
+      <div class="field profile-list-field">
+        <label for="profileSelect">Profile list</label>
+        <div class="profile-list-row">
+          <select id="profileSelect"></select>
+          <button id="setActiveProfile" class="secondary" type="button">Set Active</button>
+        </div>
+        <div class="hint">Select a profile to edit, then use Set Active to make it the server profile.</div>
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label for="profileName">Profile name</label>
+          <input id="profileName" type="text" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="targetBase">TARGET_BASE</label>
+          <input id="targetBase" type="url" placeholder="https://api.example.com/v1" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="apiKey">API_KEY</label>
+          <div class="input-with-button">
+            <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+            <button id="toggleKey" class="secondary mini" type="button">Show</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="apiModel">API_MODEL</label>
+          <div class="input-with-button">
+            <input id="apiModel" type="text" placeholder="gpt-5.5" autocomplete="off">
+            <label class="checkbox-label" for="apiModelReplace" title="When checked, replace the model in requests.">
+              <input id="apiModelReplace" type="checkbox" title="When checked, replace the model in requests.">
+              Replace
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="saveConfig" type="button">Save Settings</button>
+        <button id="addProfile" class="secondary" type="button">Add Profile</button>
+        <button id="duplicateProfile" class="secondary" type="button">Duplicate</button>
+        <button id="deleteProfile" class="danger" type="button">Delete Profile</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Logs</h2>
+      <div class="status-row">
+        <div class="status-item">
+          <div class="project-root-header">
+            <div class="status-label">Project Root Directory</div>
+            <div class="project-root-controls">
+              <label class="checkbox-label" for="useAutoProjectRoot" title="Use the current workspace or active editor project root.">
+                <input id="useAutoProjectRoot" type="checkbox" checked>
+                Auto
+              </label>
+              <button id="chooseProjectRoot" class="secondary mini" type="button" title="Select project root directory">...</button>
+            </div>
+          </div>
+          <div id="projectRoot" class="status-value">-</div>
+        </div>
+        <div class="status-item">
+          <div class="status-label">Log Directory</div>
+          <div id="logDir" class="status-value">-</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="openLogs" type="button">Open Log Directory</button>
+        <button id="openLatestLog" class="secondary" type="button">Open Latest Log</button>
+        <button id="refresh" class="secondary" type="button">Refresh</button>
+        <button id="showOutput" class="secondary" type="button">Show Output</button>
+        <button id="clearLogs" class="danger" type="button">Clear Logs</button>
+      </div>
+      <div id="recentLogs" class="logs"></div>
+    </section>
+  </div>
+
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    let state = JSON.parse('${initialStateJson}');
+    let localConfig = clone(state.config);
+    let selectedProfileId = localConfig.activeProfileId;
+
+    const els = {
+      statusBadge: document.getElementById('statusBadge'),
+      localUrl: document.getElementById('localUrl'),
+      activeProfileName: document.getElementById('activeProfileName'),
+      message: document.getElementById('message'),
+      profileSelect: document.getElementById('profileSelect'),
+      setActiveProfile: document.getElementById('setActiveProfile'),
+      profileName: document.getElementById('profileName'),
+      targetBase: document.getElementById('targetBase'),
+      apiKey: document.getElementById('apiKey'),
+      toggleKey: document.getElementById('toggleKey'),
+      apiModel: document.getElementById('apiModel'),
+      apiModelReplace: document.getElementById('apiModelReplace'),
+      bindHost: document.getElementById('bindHost'),
+      port: document.getElementById('port'),
+      logMaxCount: document.getElementById('logMaxCount'),
+      saveConfig: document.getElementById('saveConfig'),
+      addProfile: document.getElementById('addProfile'),
+      duplicateProfile: document.getElementById('duplicateProfile'),
+      deleteProfile: document.getElementById('deleteProfile'),
+      startServer: document.getElementById('startServer'),
+      stopServer: document.getElementById('stopServer'),
+      copyLocalUrl: document.getElementById('copyLocalUrl'),
+      projectRoot: document.getElementById('projectRoot'),
+      useAutoProjectRoot: document.getElementById('useAutoProjectRoot'),
+      chooseProjectRoot: document.getElementById('chooseProjectRoot'),
+      logDir: document.getElementById('logDir'),
+      openLogs: document.getElementById('openLogs'),
+      openLatestLog: document.getElementById('openLatestLog'),
+      refresh: document.getElementById('refresh'),
+      showOutput: document.getElementById('showOutput'),
+      clearLogs: document.getElementById('clearLogs'),
+      recentLogs: document.getElementById('recentLogs'),
+    };
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function send(type, payload) {
+      vscode.postMessage(Object.assign({ type }, payload || {}));
+    }
+
+    function activeProfile() {
+      return localConfig.profiles.find(function (profile) { return profile.id === localConfig.activeProfileId; }) || localConfig.profiles[0];
+    }
+
+    function ensureSelectedProfileId() {
+      if (!Array.isArray(localConfig.profiles) || !localConfig.profiles.length) {
+        selectedProfileId = '';
+        return;
+      }
+
+      if (!localConfig.profiles.some(function (profile) { return profile.id === selectedProfileId; })) {
+        const profile = activeProfile();
+        selectedProfileId = profile ? profile.id : localConfig.profiles[0].id;
+      }
+    }
+
+    function selectedProfile() {
+      ensureSelectedProfileId();
+      return localConfig.profiles.find(function (profile) { return profile.id === selectedProfileId; }) || activeProfile();
+    }
+
+    function selectedProfileIndex() {
+      const profile = selectedProfile();
+      const id = profile && profile.id;
+      return Math.max(0, localConfig.profiles.findIndex(function (item) { return item.id === id; }));
+    }
+
+    function writeProfileFieldsToConfig() {
+      const index = selectedProfileIndex();
+      const profile = localConfig.profiles[index];
+      if (!profile) {
+        return;
+      }
+
+      profile.name = els.profileName.value.trim() || 'Profile';
+      profile.targetBase = els.targetBase.value.trim();
+      profile.apiKey = els.apiKey.value;
+      profile.model = els.apiModel.value.trim();
+      profile.modelReplace = els.apiModelReplace.checked;
+      localConfig.bindHost = els.bindHost.value || '127.0.0.1';
+      localConfig.port = toInteger(els.port.value, 8899);
+      localConfig.logMaxCount = toInteger(els.logMaxCount.value, 10);
+      localConfig.useAutoProjectRoot = els.useAutoProjectRoot.checked;
+    }
+
+    function toInteger(value, fallback) {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function createProfile(source) {
+      const now = Date.now().toString(36);
+      const random = Math.random().toString(36).slice(2, 8);
+      return Object.assign({
+        id: 'profile-' + now + '-' + random,
+        name: 'New Profile',
+        targetBase: 'https://api.example.com/v1',
+        apiKey: '',
+        model: 'gpt-5.5',
+        modelReplace: false,
+      }, source || {}, { id: 'profile-' + now + '-' + random });
+    }
+
+    function currentBindUrl() {
+      return 'http://' + (localConfig.bindHost || '127.0.0.1') + ':' + (localConfig.port || 8899);
+    }
+
+    function updateComputedUrlFromInputs() {
+      localConfig.bindHost = els.bindHost.value || '127.0.0.1';
+      localConfig.port = toInteger(els.port.value, 8899);
+      els.localUrl.textContent = currentBindUrl();
+    }
+
+    function render() {
+      ensureSelectedProfileId();
+      const runtime = state.runtime || {};
+      const profile = selectedProfile();
+      const active = activeProfile();
+      const status = runtime.status || 'stopped';
+      const isRunning = Boolean(runtime.isRunning);
+      const serverSettingsLocked = isRunning || status === 'starting' || status === 'stopping';
+      const selectedIsActive = selectedProfileId === localConfig.activeProfileId;
+
+      els.statusBadge.className = 'badge ' + status;
+      els.statusBadge.textContent = capitalize(status);
+      els.activeProfileName.textContent = (active && active.name) || runtime.activeProfileName || '-';
+      els.message.textContent = runtime.lastMessage || '';
+      els.projectRoot.textContent = runtime.projectRoot || localConfig.customProjectRoot || runtime.autoProjectRoot || '-';
+      els.logDir.textContent = runtime.logDir || '-';
+
+      renderProfileSelect();
+
+      if (profile) {
+        els.profileName.value = profile.name || '';
+        els.targetBase.value = profile.targetBase || '';
+        els.apiKey.value = profile.apiKey || '';
+        els.apiModel.value = profile.model || '';
+        els.apiModelReplace.checked = Boolean(profile.modelReplace);
+      }
+
+      els.bindHost.value = localConfig.bindHost || '127.0.0.1';
+      els.port.value = String(localConfig.port || 8899);
+      els.localUrl.textContent = currentBindUrl();
+      els.logMaxCount.value = String(localConfig.logMaxCount == null ? 10 : localConfig.logMaxCount);
+      els.useAutoProjectRoot.checked = localConfig.useAutoProjectRoot !== false;
+
+      els.bindHost.disabled = serverSettingsLocked;
+      els.port.disabled = serverSettingsLocked;
+      els.logMaxCount.disabled = serverSettingsLocked;
+      els.useAutoProjectRoot.disabled = serverSettingsLocked;
+      els.chooseProjectRoot.disabled = serverSettingsLocked || els.useAutoProjectRoot.checked;
+      els.startServer.disabled = serverSettingsLocked;
+      els.stopServer.disabled = !isRunning && status !== 'starting';
+      els.setActiveProfile.disabled = selectedIsActive;
+      els.deleteProfile.disabled = !profile || localConfig.profiles.length <= 1 || selectedIsActive;
+      els.deleteProfile.title = selectedIsActive
+        ? 'The active profile cannot be deleted.'
+        : localConfig.profiles.length <= 1
+          ? 'At least one profile is required.'
+          : '';
+
+      renderRecentLogs(state.recentLogs || []);
+    }
+
+    function renderProfileSelect() {
+      ensureSelectedProfileId();
+      els.profileSelect.innerHTML = '';
+
+      localConfig.profiles.forEach(function (profile) {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = profile.name || profile.id;
+        els.profileSelect.appendChild(option);
+      });
+
+      els.profileSelect.value = selectedProfileId;
+    }
+
+    function renderRecentLogs(logs) {
+      els.recentLogs.innerHTML = '';
+
+      if (!logs.length) {
+        const empty = document.createElement('div');
+        empty.className = 'hint';
+        empty.textContent = 'No recent log files yet.';
+        els.recentLogs.appendChild(empty);
+        return;
+      }
+
+      logs.forEach(function (log) {
+        const row = document.createElement('div');
+        row.className = 'log-row';
+
+        const text = document.createElement('div');
+        text.className = 'log-name';
+        text.title = log.filePath;
+        text.textContent = log.fileName;
+
+        const meta = document.createElement('div');
+        meta.className = 'log-meta';
+        meta.textContent = formatBytes(log.size) + ' · ' + new Date(log.mtimeMs).toLocaleString();
+
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'secondary mini';
+        open.textContent = 'Open';
+        open.addEventListener('click', function () {
+          send('openLogFile', { filePath: log.filePath });
+        });
+
+        const left = document.createElement('div');
+        left.appendChild(text);
+        left.appendChild(meta);
+        row.appendChild(left);
+        row.appendChild(open);
+        els.recentLogs.appendChild(row);
+      });
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes < 1024) {
+        return bytes + ' B';
+      }
+      if (bytes < 1024 * 1024) {
+        return (bytes / 1024).toFixed(1) + ' KB';
+      }
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function capitalize(value) {
+      value = String(value || '');
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    function persistConfig() {
+      send('saveConfig', { config: localConfig });
+    }
+
+    function saveConfigOnly() {
+      writeProfileFieldsToConfig();
+      persistConfig();
+    }
+
+    els.profileSelect.addEventListener('change', function () {
+      writeProfileFieldsToConfig();
+      selectedProfileId = els.profileSelect.value;
+      render();
+    });
+
+    els.setActiveProfile.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      ensureSelectedProfileId();
+      localConfig.activeProfileId = selectedProfileId;
+      persistConfig();
+    });
+
+    els.toggleKey.addEventListener('click', function () {
+      const showing = els.apiKey.type === 'text';
+      els.apiKey.type = showing ? 'password' : 'text';
+      els.toggleKey.textContent = showing ? 'Show' : 'Hide';
+    });
+
+    els.bindHost.addEventListener('change', updateComputedUrlFromInputs);
+    els.port.addEventListener('input', updateComputedUrlFromInputs);
+    els.saveConfig.addEventListener('click', saveConfigOnly);
+
+    els.addProfile.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      const profile = createProfile();
+      localConfig.profiles.push(profile);
+      selectedProfileId = profile.id;
+      render();
+      persistConfig();
+    });
+
+    els.duplicateProfile.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      const current = selectedProfile();
+      const profile = createProfile(Object.assign({}, current, {
+        name: (current && current.name ? current.name : 'Profile') + ' Copy',
+      }));
+      localConfig.profiles.push(profile);
+      selectedProfileId = profile.id;
+      render();
+      persistConfig();
+    });
+
+    els.deleteProfile.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      ensureSelectedProfileId();
+
+      if (localConfig.profiles.length <= 1) {
+        return;
+      }
+
+      if (selectedProfileId === localConfig.activeProfileId) {
+        alert('The active profile cannot be deleted. Set another profile as active first.');
+        render();
+        return;
+      }
+
+      const profile = selectedProfile();
+      if (!profile) {
+        return;
+      }
+
+      localConfig.profiles = localConfig.profiles.filter(function (item) { return item.id !== profile.id; });
+      selectedProfileId = localConfig.activeProfileId;
+      render();
+      persistConfig();
+    });
+
+    els.startServer.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      send('start', { config: localConfig });
+    });
+
+    els.stopServer.addEventListener('click', function () { send('stop'); });
+    els.copyLocalUrl.addEventListener('click', function () {
+      updateComputedUrlFromInputs();
+      send('copyLocalUrl', { url: currentBindUrl() });
+    });
+    els.useAutoProjectRoot.addEventListener('change', function () {
+      writeProfileFieldsToConfig();
+      render();
+      persistConfig();
+    });
+    els.chooseProjectRoot.addEventListener('click', function () {
+      writeProfileFieldsToConfig();
+      send('chooseProjectRoot', { config: localConfig });
+    });
+    els.openLogs.addEventListener('click', function () { send('openLogs'); });
+    els.openLatestLog.addEventListener('click', function () { send('openLatestLog'); });
+    els.refresh.addEventListener('click', function () { send('refresh'); });
+    els.showOutput.addEventListener('click', function () { send('showOutput'); });
+    els.clearLogs.addEventListener('click', function () {
+      if (confirm('Delete all files in the current .ai-proxy-logs directory?')) {
+        send('clearLogs');
+      }
+    });
+
+    window.addEventListener('message', function (event) {
+      const message = event.data;
+      if (!message || message.type !== 'state') {
+        return;
+      }
+
+      state = message.state;
+      const previousSelectedProfileId = selectedProfileId;
+      localConfig = clone(state.config);
+      selectedProfileId = previousSelectedProfileId;
+      ensureSelectedProfileId();
+      render();
+    });
+
+    render();
+    send('ready');
+  </script>
+</body>
+</html>
