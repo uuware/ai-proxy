@@ -6,8 +6,13 @@ const http = require('http');
 
 const CONFIG_KEY = 'aiProxy.config.v1';
 const CONTROL_VIEW_ID = 'aiProxy.controlView';
-const PANEL_VIEW_ID = 'aiProxy.panelView';
 const DEFAULT_PROFILE_ID = 'profile-aixoras';
+const RECENT_FILE_EXTENSIONS = new Set([
+  '.log',
+  '.png',
+  '.jpg',
+  '.jpeg',
+]);
 
 const DEFAULT_CONFIG = Object.freeze({
   profiles: [
@@ -37,9 +42,6 @@ function activate(context) {
   context.subscriptions.push(activeController);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CONTROL_VIEW_ID, new AiProxyWebviewProvider(activeController))
-  );
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(PANEL_VIEW_ID, new AiProxyWebviewProvider(activeController))
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('aiProxy.openControl', () => activeController.focusControlView())
@@ -91,12 +93,31 @@ class AiProxyController {
     this.lastMessage = 'Server is stopped.';
     this.stopping = false;
     this.disposed = false;
+    this.logWatcher = null;
+    this.watchedLogDir = '';
+    this.logRefreshTimer = null;
     this.config = this.loadConfig();
+
+    context.subscriptions.push(
+      vscode.window.onDidChangeWindowState((e) => {
+        if (e.focused) {
+          this.config = this.loadConfig();
+          this.postState();
+        }
+      })
+    );
   }
 
   dispose() {
     this.disposed = true;
     this.views.clear();
+    this.disposeLogWatcher();
+
+    if (this.logRefreshTimer) {
+      clearTimeout(this.logRefreshTimer);
+      this.logRefreshTimer = null;
+    }
+
     this.output.dispose();
 
     if (this.child) {
@@ -116,6 +137,7 @@ class AiProxyController {
     webviewView.webview.onDidReceiveMessage((message) => this.handleWebviewMessage(message));
     webviewView.onDidDispose(() => this.views.delete(webviewView));
     this.views.add(webviewView);
+    this.watchLogDirectory();
     this.postState();
   }
 
@@ -123,18 +145,19 @@ class AiProxyController {
     try {
       await vscode.commands.executeCommand(`${CONTROL_VIEW_ID}.focus`);
     } catch (error) {
-      await vscode.commands.executeCommand(`${PANEL_VIEW_ID}.focus`);
+      // Ignore if focus fails
     }
   }
 
   loadConfig() {
-    const saved = this.context.workspaceState.get(CONFIG_KEY);
+    const saved = this.context.globalState.get(CONFIG_KEY);
     return normalizeConfig(saved || DEFAULT_CONFIG);
   }
 
   async saveConfig() {
     this.config = normalizeConfig(this.config);
-    await this.context.workspaceState.update(CONFIG_KEY, this.config);
+    await this.context.globalState.update(CONFIG_KEY, this.config);
+    this.watchLogDirectory();
     this.postState();
   }
 
@@ -176,6 +199,54 @@ class AiProxyController {
     return path.join(this.getProjectRoot(), '.ai-proxy-logs');
   }
 
+  disposeLogWatcher() {
+    if (this.logWatcher) {
+      this.logWatcher.close();
+      this.logWatcher = null;
+    }
+
+    this.watchedLogDir = '';
+  }
+
+  watchLogDirectory(logDir = this.getLogDir()) {
+    const resolvedLogDir = path.resolve(logDir);
+
+    if (this.logWatcher && this.watchedLogDir === resolvedLogDir) {
+      return;
+    }
+
+    this.disposeLogWatcher();
+
+    if (!fs.existsSync(resolvedLogDir)) {
+      return;
+    }
+
+    try {
+      this.logWatcher = fs.watch(resolvedLogDir, () => this.scheduleLogRefresh());
+      this.watchedLogDir = resolvedLogDir;
+    } catch (error) {
+      this.output.appendLine(`[${new Date().toISOString()}] Failed to watch log directory: ${error.message}`);
+    }
+  }
+
+  scheduleLogRefresh() {
+    if (this.disposed) {
+      return;
+    }
+
+    if (this.logRefreshTimer) {
+      clearTimeout(this.logRefreshTimer);
+    }
+
+    this.logRefreshTimer = setTimeout(() => {
+      this.logRefreshTimer = null;
+
+      if (!this.disposed) {
+        this.postState();
+      }
+    }, 250);
+  }
+
   getServerPath() {
     return path.join(this.context.extensionPath, 'server', 'ai-proxy.js');
   }
@@ -203,6 +274,10 @@ class AiProxyController {
 
     if (!profile) {
       throw new Error('Create at least one proxy profile before starting the server.');
+    }
+
+    if (!profile.apiKey.trim()) {
+      throw new Error('API key is required for the active proxy profile.');
     }
 
     try {
@@ -248,6 +323,7 @@ class AiProxyController {
 
     try {
       await fs.promises.mkdir(logDir, { recursive: true });
+      this.watchLogDirectory(logDir);
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to create log directory: ${error.message}`);
       return;
@@ -402,6 +478,7 @@ class AiProxyController {
   async openLogDirectory() {
     const logDir = this.getLogDir();
     await fs.promises.mkdir(logDir, { recursive: true });
+    this.watchLogDirectory(logDir);
 
     try {
       await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(logDir));
@@ -458,12 +535,23 @@ class AiProxyController {
   }
 
   async clearLogs() {
+    const confirmed = await vscode.window.showWarningMessage(
+      'Delete all files in the current AI Proxy log directory?',
+      { modal: true },
+      'Delete'
+    );
+
+    if (confirmed !== 'Delete') {
+      this.postState();
+      return;
+    }
+
     const logDir = this.getLogDir();
     let removed = 0;
 
     try {
       const entries = await fs.promises.readdir(logDir, { withFileTypes: true });
-      await Promise.all(
+      const results = await Promise.allSettled(
         entries
           .filter((entry) => entry.isFile())
           .map(async (entry) => {
@@ -471,14 +559,20 @@ class AiProxyController {
             removed += 1;
           })
       );
+      const failed = results.filter((result) => result.status === 'rejected');
+
+      if (failed.length > 0) {
+        throw failed[0].reason;
+      }
     } catch (error) {
       if (error && error.code !== 'ENOENT') {
         vscode.window.showErrorMessage(`Failed to clear logs: ${error.message}`);
+        this.postState();
         return;
       }
     }
 
-    this.lastMessage = `Removed ${removed} log file${removed === 1 ? '' : 's'}.`;
+    this.lastMessage = `Removed ${removed} log/image file${removed === 1 ? '' : 's'}.`;
     vscode.window.showInformationMessage(this.lastMessage);
     this.postState();
   }
@@ -488,9 +582,8 @@ class AiProxyController {
 
     try {
       const result = await httpGetJson(url, 2500);
-      const message = `Server responded: ${result.statusCode} ${
-        result.body && result.body.status ? result.body.status : ''
-      }`.trim();
+      const message = `Server responded: ${result.statusCode} ${result.body && result.body.status ? result.body.status : ''
+        }`.trim();
       this.lastMessage = message;
       vscode.window.showInformationMessage(message);
     } catch (error) {
@@ -502,19 +595,22 @@ class AiProxyController {
   }
 
   async findLatestLogFile() {
-    const logs = await this.listRecentLogs(1);
+    const logs = await this.listRecentLogs(1, { logsOnly: true });
     return logs[0] || null;
   }
 
-  async listRecentLogs(limit = 8) {
+  async listRecentLogs(limit = 8, options = {}) {
     const logDir = this.getLogDir();
+    const logsOnly = Boolean(options.logsOnly);
 
     try {
       const entries = await fs.promises.readdir(logDir, { withFileTypes: true });
       const logs = [];
 
       for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.log')) {
+        const extension = path.extname(entry.name).toLowerCase();
+
+        if (!entry.isFile() || !RECENT_FILE_EXTENSIONS.has(extension) || (logsOnly && extension !== '.log')) {
           continue;
         }
 
@@ -525,6 +621,7 @@ class AiProxyController {
           filePath,
           mtimeMs: stat.mtimeMs,
           size: stat.size,
+          type: extension === '.log' ? 'log' : 'image',
         });
       }
 
@@ -535,13 +632,12 @@ class AiProxyController {
   }
 
   async openLogFile(filePath) {
-    if (!filePath || !path.resolve(filePath).startsWith(path.resolve(this.getLogDir()))) {
+    if (!isPathInsideDirectory(filePath, this.getLogDir())) {
       vscode.window.showErrorMessage('Refused to open a file outside the AI Proxy log directory.');
       return;
     }
 
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
-    await vscode.window.showTextDocument(document, { preview: false });
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath), { preview: false });
   }
 
   async handleWebviewMessage(message) {
@@ -708,6 +804,18 @@ function normalizeProfile(profile, index) {
 
 function normalizeBindHost(value) {
   return value === '0.0.0.0' ? '0.0.0.0' : '127.0.0.1';
+}
+
+function isPathInsideDirectory(filePath, directoryPath) {
+  if (!filePath || !directoryPath) {
+    return false;
+  }
+
+  const resolvedFilePath = path.resolve(filePath);
+  const resolvedDirectoryPath = path.resolve(directoryPath);
+  const relativePath = path.relative(resolvedDirectoryPath, resolvedFilePath);
+
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
 }
 
 function normalizeInteger(value, fallback, min, max) {

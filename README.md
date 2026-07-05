@@ -180,3 +180,12 @@ Keep publishing tokens in a secure environment variable or secret store. Never c
 ## License
 
 MIT
+
+## Recommended API Providers
+
+Here are two API relay services I currently use. They offer access to the latest models at highly competitive prices. While their stability is generally acceptable, you might encounter occasional errors. However, considering their excellent cost-effectiveness, I still highly recommend them. 
+
+If you decide to register, I would greatly appreciate it if you use my referral links below, which helps support my work through their referral programs:
+
+- [Aixoras](https://www.aixoras.com/register?aff=h27i)
+- [VSLLM](https://vsllm.com/register?aff=lwy8)

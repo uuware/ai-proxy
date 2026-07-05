@@ -2,14 +2,26 @@
   "name": "ai-proxy-vscode",
   "displayName": "AI Proxy",
   "description": "VS Code UI for running a local OpenAI-compatible AI proxy with per-workspace request logs.",
-  "version": "0.0.1",
-  "publisher": "local-ai-proxy",
+  "version": "1.0.4",
+  "icon": "resources/icon.png",
+  "publisher": "uuware",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uuware/ai-proxy"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Other"
+    "Machine Learning",
+    "Testing",
+    "Chat",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "AI",
+    "Proxy"
   ],
   "activationEvents": [
     "onView:aiProxy.controlView",

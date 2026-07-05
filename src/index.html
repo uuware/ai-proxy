@@ -237,6 +237,18 @@
       font-weight: 600;
     }
 
+    .server-setting-value {
+      display: flex;
+      align-items: center;
+      min-height: 30px;
+      margin-top: 0;
+    }
+
+    .logs-max-count-field {
+      max-width: 220px;
+      margin-top: 10px;
+    }
+
     button {
       min-height: 30px;
       padding: 5px 10px;
@@ -337,12 +349,12 @@
           <div class="hint">For other machines, bind to all network interfaces, then connect with this computer's LAN IP and the same port.</div>
         </div>
         <div class="field">
-          <label for="port">Local server port</label>
+          <label for="port">Local Server Port</label>
           <input id="port" type="number" min="1" max="65535" step="1">
         </div>
         <div class="field">
-          <label for="logMaxCount">Max log files</label>
-          <input id="logMaxCount" type="number" min="0" step="1">
+          <label>Active Profile</label>
+          <div id="activeProfileName" class="active-profile-value server-setting-value">-</div>
         </div>
       </div>
       <div class="actions">
@@ -361,12 +373,8 @@
 
     <section class="card">
       <h2>Profile</h2>
-      <div class="active-profile-row">
-        <label>Active profile:</label>
-        <div id="activeProfileName" class="active-profile-value">-</div>
-      </div>
       <div class="field profile-list-field">
-        <label for="profileSelect">Profile list</label>
+        <label for="profileSelect">Profile List</label>
         <div class="profile-list-row">
           <select id="profileSelect"></select>
           <button id="setActiveProfile" class="secondary" type="button">Set Active</button>
@@ -428,6 +436,10 @@
           <div class="status-label">Log Directory</div>
           <div id="logDir" class="status-value">-</div>
         </div>
+      </div>
+      <div class="field logs-max-count-field">
+        <label for="logMaxCount">Max Log Files</label>
+        <input id="logMaxCount" type="number" min="0" step="1">
       </div>
       <div class="actions">
         <button id="openLogs" type="button">Open Log Directory</button>
@@ -602,7 +614,7 @@
       els.chooseProjectRoot.disabled = serverSettingsLocked || els.useAutoProjectRoot.checked;
       els.startServer.disabled = serverSettingsLocked;
       els.stopServer.disabled = !isRunning && status !== 'starting';
-      els.setActiveProfile.disabled = selectedIsActive;
+      els.setActiveProfile.disabled = serverSettingsLocked || selectedIsActive;
       els.deleteProfile.disabled = !profile || localConfig.profiles.length <= 1 || selectedIsActive;
       els.deleteProfile.title = selectedIsActive
         ? 'The active profile cannot be deleted.'
@@ -633,7 +645,7 @@
       if (!logs.length) {
         const empty = document.createElement('div');
         empty.className = 'hint';
-        empty.textContent = 'No recent log files yet.';
+        empty.textContent = 'No recent log or image files yet.';
         els.recentLogs.appendChild(empty);
         return;
       }
@@ -649,7 +661,7 @@
 
         const meta = document.createElement('div');
         meta.className = 'log-meta';
-        meta.textContent = formatBytes(log.size) + ' · ' + new Date(log.mtimeMs).toLocaleString();
+        meta.textContent = capitalize(log.type || 'log') + ' · ' + formatBytes(log.size) + ' · ' + new Date(log.mtimeMs).toLocaleString();
 
         const open = document.createElement('button');
         open.type = 'button';
@@ -703,6 +715,7 @@
       writeProfileFieldsToConfig();
       ensureSelectedProfileId();
       localConfig.activeProfileId = selectedProfileId;
+      render();
       persistConfig();
     });
 
@@ -785,11 +798,7 @@
     els.openLatestLog.addEventListener('click', function () { send('openLatestLog'); });
     els.refresh.addEventListener('click', function () { send('refresh'); });
     els.showOutput.addEventListener('click', function () { send('showOutput'); });
-    els.clearLogs.addEventListener('click', function () {
-      if (confirm('Delete all files in the current .ai-proxy-logs directory?')) {
-        send('clearLogs');
-      }
-    });
+    els.clearLogs.addEventListener('click', function () { send('clearLogs'); });
 
     window.addEventListener('message', function (event) {
       const message = event.data;
