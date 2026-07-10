@@ -213,9 +213,7 @@
     }
 
     .server-url-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
+      display: flex;
       align-items: center;
     }
 
@@ -235,6 +233,25 @@
       background: var(--vscode-input-background);
       overflow-wrap: anywhere;
       font-weight: 600;
+    }
+
+    .server-url-entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 26px;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .server-url-entry + .server-url-entry {
+      margin-top: 4px;
+    }
+
+    .server-url-copy {
+      width: 26px;
+      min-height: 26px;
+      padding: 0;
+      font-size: 16px;
+      line-height: 1;
     }
 
     .server-setting-value {
@@ -364,7 +381,6 @@
       <div class="server-url-card">
         <div class="server-url-row">
           <label for="localUrl">Server URL</label>
-          <button id="copyLocalUrl" class="secondary mini" type="button">Copy URL</button>
         </div>
         <div id="localUrl" class="server-url-value">-</div>
       </div>
@@ -377,9 +393,9 @@
         <label for="profileSelect">Profile List</label>
         <div class="profile-list-row">
           <select id="profileSelect"></select>
-          <button id="setActiveProfile" class="secondary" type="button">Set Active</button>
+          <button id="setActiveProfile" class="secondary" type="button">Use</button>
         </div>
-        <div class="hint">Select a profile to edit, then use Set Active to make it the server profile.</div>
+        <div class="hint">Select a profile to edit or use. If the server is running, the profile will be used by next requests.</div>
       </div>
       <div class="grid">
         <div class="field">
@@ -480,7 +496,6 @@
       deleteProfile: document.getElementById('deleteProfile'),
       startServer: document.getElementById('startServer'),
       stopServer: document.getElementById('stopServer'),
-      copyLocalUrl: document.getElementById('copyLocalUrl'),
       projectRoot: document.getElementById('projectRoot'),
       useAutoProjectRoot: document.getElementById('useAutoProjectRoot'),
       chooseProjectRoot: document.getElementById('chooseProjectRoot'),
@@ -564,14 +579,55 @@
       }, source || {}, { id: 'profile-' + now + '-' + random });
     }
 
-    function currentBindUrl() {
-      return 'http://' + (localConfig.bindHost || '127.0.0.1') + ':' + (localConfig.port || 8899);
+    function currentServerUrls() {
+      const host = localConfig.bindHost || '127.0.0.1';
+      const port = localConfig.port || 8899;
+
+      if (host !== '0.0.0.0') {
+        return ['http://' + host + ':' + port];
+      }
+
+      const addresses = ((state.runtime && state.runtime.networkAddresses) || [])
+        .map(function (entry) { return entry && entry.address; })
+        .filter(Boolean);
+
+      if (!addresses.length) {
+        return ['http://0.0.0.0:' + port];
+      }
+
+      return addresses.map(function (address) { return 'http://' + address + ':' + port; });
+    }
+
+    function renderServerUrls() {
+      els.localUrl.innerHTML = '';
+
+      currentServerUrls().forEach(function (url) {
+        const entry = document.createElement('div');
+        entry.className = 'server-url-entry';
+
+        const value = document.createElement('span');
+        value.textContent = url;
+
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'secondary server-url-copy';
+        copy.textContent = '⧉';
+        copy.title = 'Copy URL';
+        copy.setAttribute('aria-label', 'Copy ' + url);
+        copy.addEventListener('click', function () {
+          send('copyLocalUrl', { url: url });
+        });
+
+        entry.appendChild(value);
+        entry.appendChild(copy);
+        els.localUrl.appendChild(entry);
+      });
     }
 
     function updateComputedUrlFromInputs() {
       localConfig.bindHost = els.bindHost.value || '127.0.0.1';
       localConfig.port = toInteger(els.port.value, 8899);
-      els.localUrl.textContent = currentBindUrl();
+      renderServerUrls();
     }
 
     function render() {
@@ -603,7 +659,7 @@
 
       els.bindHost.value = localConfig.bindHost || '127.0.0.1';
       els.port.value = String(localConfig.port || 8899);
-      els.localUrl.textContent = currentBindUrl();
+      renderServerUrls();
       els.logMaxCount.value = String(localConfig.logMaxCount == null ? 10 : localConfig.logMaxCount);
       els.useAutoProjectRoot.checked = localConfig.useAutoProjectRoot !== false;
 
@@ -614,7 +670,7 @@
       els.chooseProjectRoot.disabled = serverSettingsLocked || els.useAutoProjectRoot.checked;
       els.startServer.disabled = serverSettingsLocked;
       els.stopServer.disabled = !isRunning && status !== 'starting';
-      els.setActiveProfile.disabled = serverSettingsLocked || selectedIsActive;
+      els.setActiveProfile.disabled = !profile || selectedIsActive;
       els.deleteProfile.disabled = !profile || localConfig.profiles.length <= 1 || selectedIsActive;
       els.deleteProfile.title = selectedIsActive
         ? 'The active profile cannot be deleted.'
@@ -696,8 +752,8 @@
       return value.charAt(0).toUpperCase() + value.slice(1);
     }
 
-    function persistConfig() {
-      send('saveConfig', { config: localConfig });
+    function persistConfig(type) {
+      send(type || 'saveConfig', { config: localConfig });
     }
 
     function saveConfigOnly() {
@@ -716,7 +772,7 @@
       ensureSelectedProfileId();
       localConfig.activeProfileId = selectedProfileId;
       render();
-      persistConfig();
+      persistConfig('setActiveProfile');
     });
 
     els.toggleKey.addEventListener('click', function () {
@@ -781,10 +837,6 @@
     });
 
     els.stopServer.addEventListener('click', function () { send('stop'); });
-    els.copyLocalUrl.addEventListener('click', function () {
-      updateComputedUrlFromInputs();
-      send('copyLocalUrl', { url: currentBindUrl() });
-    });
     els.useAutoProjectRoot.addEventListener('change', function () {
       writeProfileFieldsToConfig();
       render();

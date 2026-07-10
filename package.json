@@ -2,7 +2,7 @@
   "name": "ai-proxy-vscode",
   "displayName": "AI Proxy",
   "description": "VS Code UI for running a local OpenAI-compatible AI proxy with per-workspace request logs.",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "icon": "resources/icon.png",
   "publisher": "uuware",
   "license": "MIT",

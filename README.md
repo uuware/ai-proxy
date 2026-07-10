@@ -46,7 +46,7 @@ Profile settings include:
 - `API_MODEL` — the model value to use when model replacement is enabled.
 - `AI_MODEL_REPLACE` — when enabled, the proxy replaces the request `model` field with the selected profile model.
 
-The active profile is used whenever the local proxy starts. Active profiles are protected from deletion so a running or ready-to-run configuration is not accidentally removed.
+The active profile is used whenever the local proxy starts. While the proxy is running, selecting another profile and clicking `Use` updates the target, API key, model, and model-replacement behavior for new requests without restarting the server or interrupting requests already in progress. Active profiles are protected from deletion.
 
 ### Project-aware logs
 
@@ -122,9 +122,9 @@ Or use VS Code:
 
 Use `127.0.0.1` for private local development. This only accepts connections from the same machine.
 
-Use `0.0.0.0` when another machine on the same network needs to connect. Other machines should connect with your computer's LAN IP address and the configured port, for example `http://192.168.1.25:8899`.
+Use `0.0.0.0` when another machine on the same network needs to connect. The Server URL field then lists every non-loopback IPv4 address reported by the machine's network interfaces, including physical, VPN, and virtual adapters. Other machines should use an address reachable from their network, for example `http://192.168.1.25:8899`.
 
-Avoid binding to all interfaces on untrusted networks unless you understand the exposure risk.
+These are local interface addresses. A public internet address behind NAT cannot be determined from network interfaces alone and requires an external service or router configuration. Avoid binding to all interfaces on untrusted networks unless you understand the exposure risk.
 
 ## Security notes
 
@@ -202,7 +202,7 @@ First, configure AI Proxy:
 1. Search for and install AI Proxy in VS Code, Windsurf, Antigravity, or another compatible IDE.
 2. In the default profile, paste the free key below into `API_KEY`. For `API_MODEL`, you can use `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol`, and make sure the `Replace` checkbox is selected.
 3. Click `Save Settings`.
-4. Click `Set Active`.
+4. Click `Use`.
 5. Click `Start`.
 
 Then configure your agent, such as Zoo Code, Roo Code, Cline, or any other coding agent that supports API keys:
@@ -269,7 +269,7 @@ AI Proxy 为团队提供了一个轻量的控制中心,用于将 AI 请求通过
 - `API_MODEL` — 启用模型替换时使用的模型值。
 - `AI_MODEL_REPLACE` — 启用后,代理会将请求中的 `model` 字段替换为所选配置的模型。
 
-本地代理启动时会使用当前激活的配置。激活的配置受到保护,不能被删除,以避免正在运行或即将运行的配置被意外移除。
+本地代理启动时会使用当前激活的配置。代理运行期间,选择另一个配置并点击 `Use`,即可为后续新请求更新目标地址、API 密钥、模型和模型替换设置,无需重启服务器,也不会中断正在处理的请求。激活的配置受到保护,不能被删除。
 
 ### 项目感知的日志
 
@@ -345,9 +345,9 @@ code --install-extension dist\vscode-marketplace\ai-proxy-vscode-0.0.1.vsix
 
 私有本地开发请使用 `127.0.0.1`。它只接受来自同一台机器的连接。
 
-当同一网络中的另一台机器需要连接时,使用 `0.0.0.0`。其他机器应使用您电脑的局域网 IP 地址和配置的端口进行连接,例如 `http://192.168.1.25:8899`。
+当同一网络中的另一台机器需要连接时,使用 `0.0.0.0`。此时 Server URL 会列出本机网络接口报告的所有非回环 IPv4 地址,包括物理网卡、VPN 和虚拟网卡。其他机器应选择其所在网络能够访问的地址,例如 `http://192.168.1.25:8899`。
 
-除非您了解暴露风险,否则不要在不受信任的网络上绑定到所有接口。
+这些地址是本地网络接口地址。仅检查本机网卡无法确定 NAT 后面的公网地址;获取公网地址需要外部服务或路由器配置。除非您了解暴露风险,否则不要在不受信任的网络上绑定到所有接口。
 
 ## 安全说明
 
@@ -426,7 +426,7 @@ AtlasCode 目前正在做推广活动：免费注册并登录后，即可使用�
 1. 在 VS Code、Windsurf、Antigravity 等 IDE 中搜索并安装 AI Proxy。
 2. 在默认 profile 中，把下面的免费 Key 粘贴到 `API_KEY`。`API_MODEL` 可填写 `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol` 等，并选中 `Replace` 复选框。
 3. 点击 `Save Settings` 保存设置。
-4. 点击 `Set Active` 设为激活配置。
+4. 点击 `Use` 设为激活配置。
 5. 点击 `Start` 启动代理。
 
 然后配置您的 Agent，例如 Zoo Code、Roo Code、Cline，或其他支持 API Key 的编程智能体：

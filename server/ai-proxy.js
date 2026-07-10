@@ -9,17 +9,55 @@ const zlib = require('zlib');
 const { URL } = require('url');
 const { StringDecoder } = require('string_decoder');
 
-const TARGET_BASE_VALUE = process.env.AI_PROXY_TARGET_BASE || 'https://api.aixoras.com/v1';
-let TARGET_BASE;
+const DEFAULT_TARGET_BASE = '';
+const DEFAULT_API_MODEL = '';
+const CONTROL_TOKEN = process.env.AI_PROXY_CONTROL_TOKEN || '';
+let runtimeProfileConfig;
+
+function createRuntimeProfileConfig(source) {
+  const targetBaseValue = String((source && source.targetBase) || DEFAULT_TARGET_BASE).trim();
+  let targetBaseUrl;
+
+  try {
+    targetBaseUrl = new URL(targetBaseValue);
+  } catch (error) {
+    throw new Error(`Invalid target base URL: ${targetBaseValue}`);
+  }
+
+  return {
+    targetBase: targetBaseValue,
+    targetBaseUrl,
+    apiKey: typeof (source && source.apiKey) === 'string' ? source.apiKey : '',
+    model: String((source && source.model) || DEFAULT_API_MODEL).trim() || DEFAULT_API_MODEL,
+    modelReplace: Boolean(source && (source.modelReplace === true || source.modelReplace === '1' || source.modelReplace === 1)),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 try {
-  TARGET_BASE = new URL(TARGET_BASE_VALUE);
+  runtimeProfileConfig = createRuntimeProfileConfig({
+    targetBase: process.env.AI_PROXY_TARGET_BASE,
+    apiKey: process.env.AI_PROXY_KEY || '',
+    model: process.env.AI_PROXY_MODEL,
+    modelReplace: process.env.AI_PROXY_MODEL_REPLACE === '1',
+  });
 } catch (error) {
-  console.error(`Invalid AI_PROXY_TARGET_BASE URL: ${TARGET_BASE_VALUE}`);
+  console.error(error.message);
   process.exit(1);
 }
-const API_KEY = process.env.AI_PROXY_KEY || '';
-const API_MODEL = process.env.AI_PROXY_MODEL || 'gpt-5.5';
-const API_MODEL_REPLACE = process.env.AI_PROXY_MODEL_REPLACE === '1';
+
+function getRuntimeProfileConfig() {
+  return runtimeProfileConfig;
+}
+
+function updateRuntimeProfileConfig(source) {
+  runtimeProfileConfig = createRuntimeProfileConfig({
+    ...runtimeProfileConfig,
+    ...source,
+  });
+
+  return runtimeProfileConfig;
+}
 
 const LISTEN_HOST = process.env.AI_PROXY_HOST || '127.0.0.1';
 const LISTEN_PORT = Number(process.env.AI_PROXY_PORT || 8899);
@@ -186,6 +224,140 @@ async function appendRequestLog(logContext, content) {
 
 function safeJson(value) {
   return JSON.stringify(value, null, 2);
+}
+
+function sendJsonResponse(res, statusCode, body) {
+  res.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(body));
+}
+
+function readJsonRequestBody(req, maxBytes = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let receivedBytes = 0;
+    let tooLarge = false;
+
+    req.on('data', (chunk) => {
+      receivedBytes += chunk.length;
+
+      if (receivedBytes > maxBytes) {
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+
+      if (!tooLarge) {
+        chunks.push(chunk);
+      }
+    });
+
+    req.on('end', () => {
+      if (tooLarge) {
+        const error = new Error('Request body is too large.');
+        error.statusCode = 413;
+        reject(error);
+        return;
+      }
+
+      const text = Buffer.concat(chunks).toString('utf8').trim();
+
+      if (!text) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(text));
+      } catch (error) {
+        error.statusCode = 400;
+        reject(error);
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function getHeaderValue(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isLoopbackAddress(address) {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+function timingSafeStringEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''), 'utf8');
+  const rightBuffer = Buffer.from(String(right || ''), 'utf8');
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isControlRequestAuthorized(req) {
+  if (!CONTROL_TOKEN || !isLoopbackAddress(req.socket.remoteAddress)) {
+    return false;
+  }
+
+  return timingSafeStringEquals(getHeaderValue(req.headers['x-ai-proxy-control-token']), CONTROL_TOKEN);
+}
+
+function runtimeProfileStatusBody() {
+  const runtimeConfig = getRuntimeProfileConfig();
+
+  return {
+    targetBase: runtimeConfig.targetBaseUrl.href,
+    model: runtimeConfig.model,
+    modelReplace: runtimeConfig.modelReplace,
+    apiKeySet: Boolean(runtimeConfig.apiKey),
+    updatedAt: runtimeConfig.updatedAt,
+  };
+}
+
+async function handleRuntimeProfileConfigRequest(req, res) {
+  if (req.method !== 'POST') {
+    sendJsonResponse(res, 405, { error: 'method_not_allowed', message: 'Use POST to update runtime profile config.' });
+    return;
+  }
+
+  if (!isControlRequestAuthorized(req)) {
+    sendJsonResponse(res, 403, { error: 'forbidden', message: 'Runtime profile updates are only accepted from the local control client.' });
+    return;
+  }
+
+  let body;
+
+  try {
+    body = await readJsonRequestBody(req);
+  } catch (error) {
+    sendJsonResponse(res, error.statusCode || 400, { error: 'invalid_json', message: error.message });
+    return;
+  }
+
+  try {
+    const runtimeConfig = updateRuntimeProfileConfig({
+      targetBase: body.targetBase,
+      apiKey: body.apiKey,
+      model: body.model,
+      modelReplace: body.modelReplace,
+    });
+
+    console.log(
+      `[${new Date().toISOString()}] runtime profile updated: target=${runtimeConfig.targetBaseUrl.href}, model=${
+        runtimeConfig.model
+      }, modelReplacement=${runtimeConfig.modelReplace ? 'enabled' : 'disabled'}`
+    );
+
+    sendJsonResponse(res, 200, {
+      status: 'ok',
+      ...runtimeProfileStatusBody(),
+    });
+  } catch (error) {
+    sendJsonResponse(res, 400, { error: 'invalid_runtime_config', message: error.message });
+  }
 }
 
 function bufferToLogString(buffer, contentType) {
@@ -649,16 +821,17 @@ function buildAssembledChatCompletionResponseLog(responseBuffer, headers) {
   return null;
 }
 
-function buildTargetUrl(reqUrl) {
+function buildTargetUrl(reqUrl, runtimeConfig = getRuntimeProfileConfig()) {
   const incoming = new URL(reqUrl || '/', `http://${LISTEN_HOST}:${LISTEN_PORT}`);
-  const targetPathBase = TARGET_BASE.pathname.replace(/\/$/, '');
+  const targetBase = runtimeConfig.targetBaseUrl;
+  const targetPathBase = targetBase.pathname.replace(/\/$/, '');
   const incomingPath = incoming.pathname.replace(/^\//, '');
   const joinedPath = incomingPath ? `${targetPathBase}/${incomingPath}` : targetPathBase || '/';
 
-  return new URL(`${joinedPath}${incoming.search}`, TARGET_BASE);
+  return new URL(`${joinedPath}${incoming.search}`, targetBase);
 }
 
-function sanitizeHeaders(headers, targetUrl) {
+function sanitizeHeaders(headers, targetUrl, runtimeConfig = getRuntimeProfileConfig()) {
   const nextHeaders = { ...headers };
 
   nextHeaders.host = targetUrl.host;
@@ -672,7 +845,7 @@ function sanitizeHeaders(headers, targetUrl) {
 
   nextHeaders['x-forwarded-host'] = headers.host || `${LISTEN_HOST}:${LISTEN_PORT}`;
   nextHeaders['x-forwarded-proto'] = 'https';
-  nextHeaders['authorization'] = `Bearer ${API_KEY}`;
+  nextHeaders['authorization'] = `Bearer ${runtimeConfig.apiKey}`;
   return nextHeaders;
 }
 
@@ -1576,31 +1749,35 @@ function createResponseSanitizer(headers, logContext) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.url === '/__ai_proxy_status') {
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-    res.end(
-      JSON.stringify({
-        status: 'ok',
-        targetBase: TARGET_BASE.href,
-        model: API_MODEL,
-        logDir: LOG_DIR,
-        port: LISTEN_PORT,
-        now: new Date().toISOString(),
-      })
-    );
+  const incomingUrl = new URL(req.url || '/', `http://${LISTEN_HOST}:${LISTEN_PORT}`);
+
+  if (incomingUrl.pathname === '/__ai_proxy_status') {
+    sendJsonResponse(res, 200, {
+      status: 'ok',
+      ...runtimeProfileStatusBody(),
+      logDir: LOG_DIR,
+      port: LISTEN_PORT,
+      now: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (incomingUrl.pathname === '/__ai_proxy_runtime_config') {
+    handleRuntimeProfileConfigRequest(req, res);
     return;
   }
 
   const startedAt = Date.now();
+  const runtimeConfig = getRuntimeProfileConfig();
   const logContext = createRequestLogContext(req);
-  const targetUrl = buildTargetUrl(req.url);
+  const targetUrl = buildTargetUrl(req.url, runtimeConfig);
   const requestOptions = {
     protocol: targetUrl.protocol,
     hostname: targetUrl.hostname,
     port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
     method: req.method,
     path: `${targetUrl.pathname}${targetUrl.search}`,
-    headers: sanitizeHeaders(req.headers, targetUrl),
+    headers: sanitizeHeaders(req.headers, targetUrl, runtimeConfig),
     timeout: TIMEOUT_MS,
     rejectUnauthorized: false,
   };
@@ -1745,9 +1922,9 @@ const server = http.createServer((req, res) => {
 
   req.on('data', (chunk) => {
     // {"model":"gpt-5.5","temperature":0,
-    if (API_MODEL_REPLACE && isJsonRequest && chunk.includes('"model"')) {
+    if (runtimeConfig.modelReplace && isJsonRequest && chunk.includes('"model"')) {
       let text = chunk.toString('utf8');
-      text = text.replace(/"model"\s*:\s*"[^"]+"/, `"model":"${API_MODEL}"`);
+      text = text.replace(/"model"\s*:\s*"[^"]+"/, `"model":"${runtimeConfig.model}"`);
       chunk = Buffer.from(text, 'utf8');
     }
     requestChunks.push(chunk);
@@ -1791,9 +1968,10 @@ process.on('SIGINT', () => {
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   initializeLogFileEntries();
   pruneLogFiles();
+  const runtimeConfig = getRuntimeProfileConfig();
   console.log(`Proxy listening on http://${LISTEN_HOST}:${LISTEN_PORT}`);
-  console.log(`Forwarding requests to ${TARGET_BASE.href}`);
-  console.log(`Using model ${API_MODEL}`);
-  console.log(`Model replacement ${API_MODEL_REPLACE ? 'enabled' : 'disabled'}`);
+  console.log(`Forwarding requests to ${runtimeConfig.targetBaseUrl.href}`);
+  console.log(`Using model ${runtimeConfig.model}`);
+  console.log(`Model replacement ${runtimeConfig.modelReplace ? 'enabled' : 'disabled'}`);
   console.log(`Saving proxy request logs to ${LOG_DIR}`);
 });

@@ -2,7 +2,9 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 const cp = require('child_process');
+const crypto = require('crypto');
 const http = require('http');
+const os = require('os');
 
 const CONFIG_KEY = 'aiProxy.config.v1';
 const CONTROL_VIEW_ID = 'aiProxy.controlView';
@@ -97,6 +99,7 @@ class AiProxyController {
     this.watchedLogDir = '';
     this.logRefreshTimer = null;
     this.config = this.loadConfig();
+    this.controlToken = '';
 
     context.subscriptions.push(
       vscode.window.onDidChangeWindowState((e) => {
@@ -256,12 +259,53 @@ class AiProxyController {
     return active || this.config.profiles[0];
   }
 
+  getNetworkAddresses() {
+    const addresses = [];
+    const seen = new Set();
+
+    for (const [interfaceName, entries] of Object.entries(os.networkInterfaces())) {
+      for (const entry of entries || []) {
+        const isIpv4 = entry.family === 4 || entry.family === 'IPv4';
+
+        if (!isIpv4 || entry.internal || !entry.address) {
+          continue;
+        }
+
+        const address = String(entry.address);
+
+        if (seen.has(address)) {
+          continue;
+        }
+
+        seen.add(address);
+        addresses.push({ interfaceName, family: 'IPv4', address });
+      }
+    }
+
+    return addresses.sort(
+      (left, right) => left.interfaceName.localeCompare(right.interfaceName) || left.address.localeCompare(right.address)
+    );
+  }
+
   getLocalUrl() {
     return `http://${this.config.bindHost}:${this.config.port}`;
   }
 
   getHealthCheckUrl() {
     return `http://127.0.0.1:${this.config.port}`;
+  }
+
+  getControlUrl(pathname) {
+    return `${this.getHealthCheckUrl()}${pathname}`;
+  }
+
+  getRuntimeProfilePayload(profile = this.getActiveProfile()) {
+    return {
+      targetBase: profile ? profile.targetBase : '',
+      apiKey: profile ? profile.apiKey || '' : '',
+      model: profile ? profile.model || '' : '',
+      modelReplace: Boolean(profile && profile.modelReplace),
+    };
   }
 
   isRunning() {
@@ -335,6 +379,9 @@ class AiProxyController {
     this.stopping = false;
     this.postState();
 
+    const controlToken = crypto.randomBytes(32).toString('hex');
+    this.controlToken = controlToken;
+
     const env = {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
@@ -342,6 +389,7 @@ class AiProxyController {
       AI_PROXY_KEY: profile.apiKey || '',
       AI_PROXY_MODEL: profile.model || '',
       AI_PROXY_MODEL_REPLACE: profile.modelReplace ? '1' : '0',
+      AI_PROXY_CONTROL_TOKEN: controlToken,
       AI_PROXY_HOST: this.config.bindHost,
       AI_PROXY_PORT: String(this.config.port),
       AI_PROXY_LOG_DIR: logDir,
@@ -388,6 +436,7 @@ class AiProxyController {
     child.once('error', (error) => {
       this.status = 'stopped';
       this.child = null;
+      this.controlToken = '';
       this.lastMessage = `Failed to start server: ${error.message}`;
       this.output.appendLine(`[${new Date().toISOString()}] ${this.lastMessage}`);
       vscode.window.showErrorMessage(this.lastMessage);
@@ -397,6 +446,7 @@ class AiProxyController {
     child.once('exit', (code, signal) => {
       const wasStopping = this.stopping || this.disposed;
       this.child = null;
+      this.controlToken = '';
       this.stopping = false;
       this.status = 'stopped';
       this.startedAt = '';
@@ -419,6 +469,69 @@ class AiProxyController {
         this.postState();
       }
     }, 1200);
+  }
+
+  async applyRuntimeProfileConfig() {
+    if (!this.isRunning()) {
+      return false;
+    }
+
+    if (!this.controlToken) {
+      throw new Error('Running proxy control token is missing.');
+    }
+
+    const profile = this.getActiveProfile();
+    const result = await httpPostJson(
+      this.getControlUrl('/__ai_proxy_runtime_config'),
+      this.getRuntimeProfilePayload(profile),
+      {
+        'x-ai-proxy-control-token': this.controlToken,
+      },
+      2500
+    );
+
+    if (result.statusCode < 200 || result.statusCode >= 300) {
+      const message = result.body && result.body.message ? result.body.message : `HTTP ${result.statusCode}`;
+      throw new Error(`Failed to update running proxy profile: ${message}`);
+    }
+
+    this.output.appendLine(
+      `[${new Date().toISOString()}] Runtime profile updated: ${profile.name} -> ${profile.targetBase}`
+    );
+    return true;
+  }
+
+  async saveConfigFromWebview(nextConfig, message = 'Settings saved.') {
+    const previousConfig = this.config;
+    this.config = normalizeConfig(nextConfig || this.config);
+    const shouldApplyRuntime = this.isRunning();
+
+    try {
+      if (shouldApplyRuntime) {
+        this.validateRuntimeConfig();
+      }
+
+      await this.saveConfig();
+
+      if (shouldApplyRuntime) {
+        await this.applyRuntimeProfileConfig();
+      }
+    } catch (error) {
+      this.config = previousConfig;
+
+      try {
+        await this.saveConfig();
+      } catch (rollbackError) {
+        this.output.appendLine(`[${new Date().toISOString()}] Failed to roll back profile config: ${rollbackError.message}`);
+      }
+
+      throw error;
+    }
+
+    this.lastMessage = shouldApplyRuntime
+      ? `${message} Running proxy profile updated for next requests.`
+      : message;
+    this.postState();
   }
 
   async stopServer() {
@@ -462,6 +575,7 @@ class AiProxyController {
 
     if (this.child === child) {
       this.child = null;
+      this.controlToken = '';
       this.stopping = false;
       this.status = 'stopped';
       this.startedAt = '';
@@ -652,10 +766,10 @@ class AiProxyController {
           this.postState();
           break;
         case 'saveConfig':
-          this.config = normalizeConfig(message.config || this.config);
-          await this.saveConfig();
-          this.lastMessage = 'Settings saved.';
-          this.postState();
+          await this.saveConfigFromWebview(message.config, 'Settings saved.');
+          break;
+        case 'setActiveProfile':
+          await this.saveConfigFromWebview(message.config, 'Active profile changed.');
           break;
         case 'start':
           this.config = normalizeConfig(message.config || this.config);
@@ -713,6 +827,7 @@ class AiProxyController {
         startedAt: this.startedAt,
         pid: this.child ? this.child.pid : null,
         localUrl: this.getLocalUrl(),
+        networkAddresses: this.getNetworkAddresses(),
         logDir: this.getLogDir(),
         projectRoot: this.getProjectRoot(),
         autoProjectRoot: this.getAutoProjectRoot(),
@@ -746,6 +861,7 @@ class AiProxyController {
         startedAt: this.startedAt,
         pid: this.child ? this.child.pid : null,
         localUrl: this.getLocalUrl(),
+        networkAddresses: this.getNetworkAddresses(),
         logDir: this.getLogDir(),
         projectRoot: this.getProjectRoot(),
         autoProjectRoot: this.getAutoProjectRoot(),
@@ -826,20 +942,23 @@ function normalizeInteger(value, fallback, min, max) {
   return Math.min(max, Math.max(min, number));
 }
 
+function parseJsonResponseBody(chunks) {
+  const text = Buffer.concat(chunks).toString('utf8');
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return { raw: text };
+  }
+}
+
 function httpGetJson(url, timeoutMs) {
   return new Promise((resolve, reject) => {
     const request = http.get(url, { timeout: timeoutMs }, (response) => {
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8');
-        let body = null;
-        try {
-          body = JSON.parse(text);
-        } catch (error) {
-          body = { raw: text };
-        }
-        resolve({ statusCode: response.statusCode, body });
+        resolve({ statusCode: response.statusCode, body: parseJsonResponseBody(chunks) });
       });
     });
 
@@ -847,6 +966,37 @@ function httpGetJson(url, timeoutMs) {
       request.destroy(new Error(`Timed out after ${timeoutMs}ms`));
     });
     request.on('error', reject);
+  });
+}
+
+function httpPostJson(url, body, headers, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body || {});
+    const request = http.request(
+      url,
+      {
+        method: 'POST',
+        timeout: timeoutMs,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'content-length': String(Buffer.byteLength(payload)),
+          ...(headers || {}),
+        },
+      },
+      (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          resolve({ statusCode: response.statusCode, body: parseJsonResponseBody(chunks) });
+        });
+      }
+    );
+
+    request.on('timeout', () => {
+      request.destroy(new Error(`Timed out after ${timeoutMs}ms`));
+    });
+    request.on('error', reject);
+    request.end(payload);
   });
 }
 
