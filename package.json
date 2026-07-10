@@ -2,7 +2,7 @@
   "name": "ai-proxy-vscode",
   "displayName": "AI Proxy",
   "description": "VS Code UI for running a local OpenAI-compatible AI proxy with per-workspace request logs.",
-  "version": "1.0.4",
+  "version": "1.0.8",
   "icon": "resources/icon.png",
   "publisher": "uuware",
   "license": "MIT",
@@ -25,7 +25,6 @@
   ],
   "activationEvents": [
     "onView:aiProxy.controlView",
-    "onView:aiProxy.panelView",
     "onCommand:aiProxy.openControl",
     "onCommand:aiProxy.start",
     "onCommand:aiProxy.stop",
@@ -37,7 +36,8 @@
     "package:vsix": "node ./dev/package-extension.js --target marketplace",
     "package:vsx": "node ./dev/package-extension.js --target open-vsx",
     "package:all": "node ./dev/package-extension.js --target all --clean",
-    "publish:open-vsx": "ovsx publish"
+    "publish:open-vsx": "ovsx publish",
+    "publish:marketplace": "vsce publish"
   },
   "contributes": {
     "commands": [
@@ -97,13 +97,6 @@
           "title": "AI Proxy",
           "icon": "resources/icon.svg"
         }
-      ],
-      "panel": [
-        {
-          "id": "aiProxyPanel",
-          "title": "AI Proxy",
-          "icon": "resources/icon.svg"
-        }
       ]
     },
     "views": {
@@ -113,30 +106,23 @@
           "name": "Control",
           "type": "webview"
         }
-      ],
-      "aiProxyPanel": [
-        {
-          "id": "aiProxy.panelView",
-          "name": "Control",
-          "type": "webview"
-        }
       ]
     },
     "menus": {
       "view/title": [
         {
           "command": "aiProxy.start",
-          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "when": "view == aiProxy.controlView",
           "group": "navigation@1"
         },
         {
           "command": "aiProxy.stop",
-          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "when": "view == aiProxy.controlView",
           "group": "navigation@2"
         },
         {
           "command": "aiProxy.openLogs",
-          "when": "view == aiProxy.controlView || view == aiProxy.panelView",
+          "when": "view == aiProxy.controlView",
           "group": "navigation@3"
         }
       ]
