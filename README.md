@@ -187,37 +187,9 @@ MIT
 
 Here is an API relay service I currently use. I am not affiliated with them; I simply use it and think it is worth recommending. It offers access to the latest models at highly competitive prices. While its stability is generally acceptable and you might encounter occasional errors, its excellent cost-effectiveness makes it something I still highly recommend.
 
-If you decide to register, I would greatly appreciate it if you use my referral link below, which helps support my work through their referral program. After registering and signing in, you can also contact me to join the provider's WeChat group and receive free trial credits.
+If you decide to register, I would greatly appreciate it if you use my referral link below, which helps support my work through their referral program. After registering and signing in, you can also join the provider's WeChat group from the official website and receive free trial credits.
 
 - [AtlasCode](https://www.aixoras.com/register?aff=h27i)
-
-### Sponsor free key promotion
-
-AtlasCode is currently running a promotion: register for free and sign in, and you can use the public free key below. The key will be refreshed during the promotion period.
-
-Setup steps:
-
-First, configure AI Proxy:
-
-1. Search for and install AI Proxy in VS Code, Windsurf, Antigravity, or another compatible IDE.
-2. In the default profile, paste the free key below into `API_KEY`. For `API_MODEL`, you can use `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol`, and make sure the `Replace` checkbox is selected.
-3. Click `Save Settings`.
-4. Click `Use`.
-5. Click `Start`.
-
-Then configure your agent, such as Zoo Code, Roo Code, Cline, or any other coding agent that supports API keys:
-
-1. Set API Provider to OpenAI Compatible.
-2. Set Base URL to `http://127.0.0.1:8899`; you can copy it from AI Proxy.
-3. Set API Key and Model to any placeholder value, such as `xxx`. They will be replaced by the profile configured in AI Proxy.
-
-You can then use `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol` for free. Note that this key has a limited quota and stops working once it is used up. To continue using the service, please register and top up through my referral link.
-
-Free key (limited quota):
-
-```
-sk-d6H6i28W2jHecbOCzgg3FJWjZ8rbEgIxK9yvtXo0DlOQLqSY
-```
 
 ---
 
@@ -411,34 +383,6 @@ MIT
 推荐一个我正在使用的 API 服务商。它们与我没有直接关系，只是我个人使用后觉得值得推荐。
 它们以极具竞争力的价格提供最新模型的访问。虽然稳定性总体可以接受，您偶尔也可能会遇到错误，但考虑到其出色的性价比，我仍然比较推荐。
 
-如果您决定注册，非常感谢您使用下面我的推荐链接，这会通过它们的推荐计划支持我的工作。注册并登录后，您也可以通过我加入服务商的微信群，获得免费的试用额度。
+如果您决定注册，非常感谢您使用下面我的推荐链接，这会通过它们的推荐计划支持我的工作。注册并登录后，您也可以加入官网服务商的微信群，并获得免费的试用额度。现在赞助商有免费Key促销活动，可以在微信群里领取。
 
 - [AtlasCode](https://www.aixoras.com/register?aff=h27i)
-
-### 赞助商免费 Key 促销活动
-
-AtlasCode 目前正在做推广活动：免费注册并登录后，即可使用下面这个公开的免费 Key；活动期间该 Key 会持续更新。
-
-配置步骤：
-
-先配置 AI Proxy：
-
-1. 在 VS Code、Windsurf、Antigravity 等 IDE 中搜索并安装 AI Proxy。
-2. 在默认 profile 中，把下面的免费 Key 粘贴到 `API_KEY`。`API_MODEL` 可填写 `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol` 等，并选中 `Replace` 复选框。
-3. 点击 `Save Settings` 保存设置。
-4. 点击 `Use` 设为激活配置。
-5. 点击 `Start` 启动代理。
-
-然后配置您的 Agent，例如 Zoo Code、Roo Code、Cline，或其他支持 API Key 的编程智能体：
-
-1. API Provider 选择 OpenAI Compatible。
-2. Base URL 填写 `http://127.0.0.1:8899`，也可以直接从 AI Proxy 中复制。
-3. API Key 和 Model 可以随便填写占位值，例如 `xxx`；它们会被您在 AI Proxy 中配置的 profile 替换。
-
-完成后即可免费使用 `gpt-5.5`, `openai-gpt-5.6-luna`, `openai-gpt-5.6-terra`, `openai-gpt-5.6-sol`。请注意该 Key 有额度限制，用完即失效；第二天会更新新的Key。如需继续使用，请通过我的推荐链接注册并充值。
-
-免费 Key（限额）：
-
-```
-sk-d6H6i28W2jHecbOCzgg3FJWjZ8rbEgIxK9yvtXo0DlOQLqSY
-```
