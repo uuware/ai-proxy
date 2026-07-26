@@ -859,9 +859,12 @@
       }
 
       state = message.state;
+      const previousActiveProfileId = localConfig.activeProfileId;
       const previousSelectedProfileId = selectedProfileId;
       localConfig = clone(state.config);
-      selectedProfileId = previousSelectedProfileId;
+      selectedProfileId = localConfig.activeProfileId !== previousActiveProfileId
+        ? localConfig.activeProfileId
+        : previousSelectedProfileId;
       ensureSelectedProfileId();
       render();
     });
