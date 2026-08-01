@@ -43,7 +43,11 @@ function activate(context) {
 
   context.subscriptions.push(activeController);
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(CONTROL_VIEW_ID, new AiProxyWebviewProvider(activeController))
+    vscode.window.registerWebviewViewProvider(
+      CONTROL_VIEW_ID,
+      new AiProxyWebviewProvider(activeController),
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
   );
   context.subscriptions.push(
     vscode.commands.registerCommand('aiProxy.openControl', () => activeController.focusControlView())
@@ -101,14 +105,6 @@ class AiProxyController {
     this.config = this.loadConfig();
     this.controlToken = '';
 
-    context.subscriptions.push(
-      vscode.window.onDidChangeWindowState((e) => {
-        if (e.focused) {
-          this.config = this.loadConfig();
-          this.postState();
-        }
-      })
-    );
   }
 
   dispose() {

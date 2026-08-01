@@ -191,6 +191,9 @@ If you decide to register, I would greatly appreciate it if you use my referral 
 
 - [AtlasCode](https://www.aixoras.com/register?aff=h27i)
 
+If you are looking for cost-effective API relay/proxy services, you can find a comparison list of prices and response times for various providers on the following website. Please note that this project is not affiliated with the website in any way; the link is provided for reference only, and we assume no liability for any risks associated with its use.
+- [hvoy.ai](https://www.hvoy.ai/)
+
 ---
 
 # AI Proxy (中文说明)
@@ -380,9 +383,5 @@ MIT
 
 ## 推荐的 API 服务商
 
-推荐一个我正在使用的 API 服务商。它们与我没有直接关系，只是我个人使用后觉得值得推荐。
-它们以极具竞争力的价格提供最新模型的访问。虽然稳定性总体可以接受，您偶尔也可能会遇到错误，但考虑到其出色的性价比，我仍然比较推荐。
-
-如果您决定注册，非常感谢您使用下面我的推荐链接，这会通过它们的推荐计划支持我的工作。注册并登录后，您也可以加入官网服务商的微信群，并获得免费的试用额度。现在赞助商有免费Key促销活动，可以在微信群里领取。
-
-- [AtlasCode](https://www.aixoras.com/register?aff=h27i)
+如果您正在寻找高性价比的 API 中转服务，可以通过以下网站查看各大中转站的价格与响应速度对比列表。需要说明的是，本软件与该网站无任何关联，仅做推荐，不承担任何使用风险。
+- [hvoy.ai](https://www.hvoy.ai/)
